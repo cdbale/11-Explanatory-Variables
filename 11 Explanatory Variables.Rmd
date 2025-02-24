@@ -367,7 +367,7 @@ bind_rows(
 
 ## Exercise 11
 
-Multiple regression is often referred to as "key drivers analysis" in business applications. In the Nielsen `soup_data`, now available on the AWS database, the outcome of interest is `Sales`.
+Multiple regression is often referred to as "key drivers analysis" in business applications. In the Nielsen `soup_data`, available on Canvas, the outcome of interest is `Sales`.
 
 1. Using `soup_data`, build and compare four *multiple* regressions for `CAMPBELL’S Sales` for the `WEST CENSUS TA` using different combinations (your choice) of the following promotional explanatory variables: `Any_Disp_Spend` (spend on in-store displays), `Any_Feat_Spend` (spend on coupons and other printed promotions, collectively called "features"), and `Any_Price_Decr_Spend` (spend on price decreases).
 2. Use the best-fitting model to predict counterfactual `Sales` for Campbell’s. Assume that Campbell's can spend up to $10,000 for this trading area. Produce predictions for four counterfactual scenarios and use them to detail a proposal for Campbell's for the `WEST CENSUS TA`.
