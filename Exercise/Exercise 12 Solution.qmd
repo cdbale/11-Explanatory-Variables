@@ -1,0 +1,208 @@
+---
+title: "Exercise 12"
+author: "Marc Dotson"
+format: docx
+---
+
+Multiple regression is often referred to as "key drivers analysis" in business applications. In the Nielsen `soup_data`, now available on the AWS database, the outcome of interest is `Sales`.
+
+1. Using `soup_data`, build and compare four *multiple* regressions for `CAMPBELL’S Sales` for the `WEST CENSUS TA` using the following promotional explanatory variables: `Any_Disp_Spend` (spend on in-store displays), `Any_Feat_Spend` (spend on coupons and other printed promotions, collectively called "features"), and `Any_Price_Decr_Spend` (spend on price decreases).
+2. Use the best-fitting model to predict counterfactual `Sales` for Campbell’s. Assume that Campbell's can spend up to $10,000 for this trading area. Produce predictions for four counterfactual scenarios and use them to detail a proposal for Campbell's for the `WEST CENSUS TA`.
+3. Render the Quarto document into Word and upload to Canvas and complete the mid-course evaluation.
+
+**Five points total, one point each for:**
+
+- **Importing soup_data from the database.**
+- **Filtering the data for `CAMPBELL'S Sales` and 'WEST CENSUS TA'.**
+- **Fitting four multiple regressions using a combination of the three explanatory variables and comparing overall model fit.**
+- **Produce predictions for four counterfactual scenarios of sales using the best-fitting model and detail a policy proposal for Campbell's based on the predictions.**
+- **One point for submitting a rendered Word document.**
+
+## Model Building
+
+Let's load all the packages we'll need.
+
+```{r}
+# Load packages.
+library(tidyverse)
+library(tidymodels)
+```
+
+We first need to import `soup_data` from the database.
+
+```{r}
+#| eval: false
+
+# Connect to the database.
+con <- DBI::dbConnect(
+  RPostgreSQL::PostgreSQL(),
+  dbname = "analyticsdb",
+  host = "analyticsdb.ccutuqssh92k.us-west-2.rds.amazonaws.com",
+  port = 55432,
+  user = "quantmktg",
+  password = rstudioapi::askForPassword("Database password")
+)
+
+# Import the data.
+soup_data <- dplyr::tbl(con, "soup_data") |>
+  collect()
+
+# Disconnect from the database.
+DBI::dbDisconnect(con)
+
+# Write the data locally.
+write_csv(here::here("Data", "soup_data.csv"))
+```
+
+Now that we have imported data from the database once, we don't need to reconnect so I've set the above to `#| eval: false`. Let's import the data, filter to the specific brand and trade area, and start fitting models.
+
+```{r}
+# Import and filter data.
+soup_data <- read_csv(here::here("Data", "soup_data.csv")) |> 
+  filter(Retailer_Trade_Areas == "WEST CENSUS TA", Brand_High == "CAMPBELL'S")
+
+# Full model (all three explanatory variables).
+fit_01 <- linear_reg() |> 
+  set_engine(engine = "lm") |> 
+  fit(
+    Sales ~ Any_Disp_Spend + Any_Feat_Spend + Any_Price_Decr_Spend, 
+    data = soup_data
+  )
+
+# Print parameter estimates.
+tidy(fit_01, conf.int = TRUE)
+```
+
+All of the parameter estimates are significant, but the effect of each of the explanatory variables on the outcome are very small, especially compared to the intercept.
+
+```{r}
+# Visualize parameter estimates.
+tidy(fit_01, conf.int = TRUE) |> 
+  ggplot(aes(x = term)) + 
+  geom_point(aes(y = estimate)) + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1) +
+  geom_hline(yintercept = 0, color = "red")
+```
+
+The scale is so different between the intercept and the slope parameters that we can't even see the difference between the slope parameters. Since the slope parameters are really what we're interested in here, let's just plot them.
+
+```{r}
+# Visualize slope parameter estimates.
+tidy(fit_01, conf.int = TRUE) |> 
+  filter(term != "(Intercept)") |> 
+  ggplot(aes(x = term)) + 
+  geom_point(aes(y = estimate)) + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1) +
+  geom_hline(yintercept = 0, color = "red")
+```
+
+Display spend clearly matters the most. In fact, it's the only one of the parameters with a confidence interval that suggests it might have an effect on `Sales` greater than 1 (i.e., would yield a positive return on investment).
+
+```{r}
+# Model without display spend.
+fit_02 <- linear_reg() |> 
+  set_engine(engine = "lm") |> 
+  fit(
+    Sales ~ Any_Feat_Spend + Any_Price_Decr_Spend, 
+    data = soup_data
+  )
+
+# Visualize slope parameter estimates.
+tidy(fit_02, conf.int = TRUE) |> 
+  filter(term != "(Intercept)") |> 
+  ggplot(aes(x = term)) + 
+  geom_point(aes(y = estimate)) + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1) +
+  geom_hline(yintercept = 0, color = "red")
+```
+
+If we leave out display spend, we can see that feature spend is suddenly much more important, even greater than 1. Price decrease spend stays about the same.
+
+```{r}
+# Model without feature spend.
+fit_03 <- linear_reg() |> 
+  set_engine(engine = "lm") |> 
+  fit(
+    Sales ~ Any_Disp_Spend + Any_Price_Decr_Spend, 
+    data = soup_data
+  )
+
+# Visualize slope parameter estimates.
+tidy(fit_03, conf.int = TRUE) |> 
+  filter(term != "(Intercept)") |> 
+  ggplot(aes(x = term)) + 
+  geom_point(aes(y = estimate)) + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1) +
+  geom_hline(yintercept = 0, color = "red")
+```
+
+If we leave out feature spend, we can see that display spend is suddenly even *more* important, clearly greater than 1 and maybe even greater than 2. Price decrease spend again stays about the same.
+
+```{r}
+# Model without price decrease spend.
+fit_04 <- linear_reg() |> 
+  set_engine(engine = "lm") |> 
+  fit(
+    Sales ~ Any_Disp_Spend + Any_Feat_Spend, 
+    data = soup_data
+  )
+
+# Visualize slope parameter estimates.
+tidy(fit_04, conf.int = TRUE) |> 
+  filter(term != "(Intercept)") |> 
+  ggplot(aes(x = term)) + 
+  geom_point(aes(y = estimate)) + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1) +
+  geom_hline(yintercept = 0, color = "red")
+```
+
+Without price decrease spend, feature spend shifts the most, with the confidence interval now including 1.
+
+All of these comparisons demonstrate how sensitive the parameter estimates are to what is or isn't included in the model. My understanding of sales says that all three of the explanatory variables should be included in the model. We can also compare the overall model fit to see which one is indeed the "best-fitting model."
+
+```{r}
+# Model comparison.
+tibble(
+  model = c(
+    "Full model", 
+    "Model without display spend", 
+    "Model without feature spend", 
+    "Model without price decrease spend"
+  )
+) |> 
+  bind_cols(
+    bind_rows(
+      glance(fit_01), 
+      glance(fit_02), 
+      glance(fit_03), 
+      glance(fit_04)
+    )
+  ) |> 
+  arrange(desc(r.squared))
+```
+
+The "full model" that includes all three of the explanatory variables fits best according to the R-squared overall fit statistic.
+
+## Counterfactual Predictions
+
+Let's use the full model to predict `Sales`. Note that we are assuming we have $10,000 to spend across all three of the explanatory variables.
+
+```{r}
+# Create new data representing various counterfactual scenarios for spending our budget.
+scenarios <- tibble(
+  Any_Disp_Spend = c(10000, 0, 0, 10000/3),
+  Any_Feat_Spend = c(0, 10000, 0, 10000/3),
+  Any_Price_Decr_Spend = c(0, 0, 10000, 10000/3)
+)
+
+# Predict sales using fit_01.
+predict(fit_01, new_data = scenarios) |> 
+  bind_cols(
+    predict(fit_01, new_data = scenarios, type = "pred_int"),
+    scenarios
+  ) |> 
+  arrange(desc(.pred))
+```
+
+Based on our model, the best thing Campbell's can do in this trade area is put the entire promotional spend budget in displays. We inferred this from it being the most important of the explanatory variables, but now we can directly see that spending $10,000 on display should produce sales of about $263,026 dollars. Or, even better, the prediction says such a display spend should produce sales anywhere from $140,634 to $385,418, accounting for the uncertainty in our parameter estimates.
+
